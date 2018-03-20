@@ -1,0 +1,14 @@
+Pages of the Application 
+->> Create| A Presentation Page
+-- Content --
+[input] Presentation Title
+[input] Upload Presentation Slide {ppt format}
+[input] Presenter Username
+[button] Submit
+
+->> Presentation Page
+-- Content --
+[display] Presentation Title
+[display] Presentation Slide {images}
+[display] Slide Details [currentSlide Index, Number of Slides]
+[buttons]<button>Prev</button>  <button>Next</button> [/buttons]
