@@ -4,38 +4,37 @@ const express = require('express');
 const bodyParser = require('body-parser');
 const http = require('http');
 const socket = require('socket.io');
-const glob = require('glob');
+
+const path    = require('path');
+const pdf2img = require('pdf2img');
+
+const inputFile = __dirname + '/test.pdf';
 
 const app = express();
 const server = http.createServer(app);
 const io = socket(server);
 const link= {};
-const images = [];
-let currentIndex =1;
+let images = [];
+let currentIndex =0;
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({
     extended: false
 }));
 app.use(crossOriginMiddleWare());
 app.get('/', (req, res, next) => {
-    res.sendFile(__dirname+'/index.html');
+    res.sendFile(__dirname+'/index1.html');
 });
+
 app.get('/:link', (req, res, next)=> {
     const link = req.params.link;
-    fs.readFile(`output/${images[1]}`, function(err, buf){
-        if(err) {
-            res.json({success: 'false',
-            message: `Unable to Retrieve `,
-            error: error
-          });
-        } else {
-            res.json({success: 'true',
+    res.json({success: 'true',
             message: `This is the link that you entered - http://localhost:4000/${link}`,
           });
-        }
-       
-    });
   
+});
+
+app.get('/presenter', (req, res, next)=> {
+    res.sendFile(__dirname+'/presenter.html');
 });
 
 app.post('/create', (req, res, next) => {
@@ -75,32 +74,36 @@ function startSocketServer() {
     io.on("connection", (socket) => {
         console.log(`A new user is connected`);
         socket.on('start', (data) => {
-            fs.readFile(`output/${images[currentIndex]}`, function(err, buf){
+            fs.readFile(`output/${images[currentIndex]?images[currentIndex]['name']: 'image.png'}`, function(err, buf){
                if(err) {
                    console.log(`Could not fetch the first image`);
                 socket.emit('start-res', {
                     message: 'you are welcome',
                     image: false,
-                    buf: []
+                    buf: [],
+                    currentIndex: images[currentIndex]['page'],
+                    totalNumber: images.length
                 });
                } else {
                 socket.emit('start-res', {
                     message: 'you are welcome',
                     image: true,
-                    buf: buf.toString('base64')
+                    buf: buf.toString('base64'),
+                    currentIndex: images[currentIndex]['page'],
+                    totalNumber: images.length
                 });
                }
             });
             
         });
         socket.on('slide-next', (data) => {
-            currentIndex = currentIndex === images.length? 1 : ++currentIndex;
-            console.log(` Next Slide -> ${currentIndex}`);
+            currentIndex = ++currentIndex === images.length ? 0 : currentIndex;
+            console.log(` Next Slide -> ${currentIndex} Total Slides -> ${images.length}`);
             moveSlide(io, data, 'next-slide');
         });
 
         socket.on('slide-prev', (data) => {
-            currentIndex = currentIndex === images.length? 1 : --currentIndex;
+            currentIndex =  currentIndex > 0? --currentIndex: 0;
             console.log(` Prev Slide -> ${currentIndex}`);
             moveSlide(io, data, 'prev-slide');
         });
@@ -109,22 +112,18 @@ function startSocketServer() {
 }
 
 function moveSlide(io, data, event) {
-   // if(data.admin === link.admin) {
-        fs.readFile(`output/${images[currentIndex]}`, function(err, buf){
+        fs.readFile(`output/${images[currentIndex]?images[currentIndex]['name']: 'image.png'}`, function(err, buf){
             if(err) {
                 io.emit(event, {
                     image: false,
                     buf: [],
-                    currentIndex: currentIndex,
-                    totalNumber: images.length,
-                    canNext: currentIndex < images.length,
-                    canPrev: currentIndex > 1
+                    totalNumber: images.length
                 });
             } else {
                 io.emit(event, {
                     image: true,
                     buf: buf.toString('base64'),
-                    currentIndex: currentIndex,
+                    currentIndex: images[currentIndex]['page'],
                     totalNumber: images.length,
                     canNext: currentIndex < images.length,
                     canPrev: currentIndex > 1
@@ -132,58 +131,26 @@ function moveSlide(io, data, event) {
             }
             
         });
-    // } else {
-    //     io.broadcast('slide-nav-error', {
-    //         success: false,
-    //         message: 'You do not have the authorization to use this feature'
-    //     });
-    // }
 }
-function getAllImageFiles() {
-    return new Promise((resolve, reject) => {
-        if(fs.existsSync('output')) {
-            fs.readdirSync('output').forEach(
-                (file, index) => {
-                    images.push(file);
-                    console.log(`Loaded Image Index => ${index}`);
-                }
-            );
 
-            return resolve(images);
-    
-        }
-        else {
-            return reject('files not resolve');
-        }
-    })
-    
-}
-glob('./*.ppt', {}, (error, files) => {
-    console.log('files length : ', files.length);
-    if(files) {
-        new Converter({
-            files:          files,
-            output:         'output/',
-            invert:         false,
-            deletePdfFile:  false,
-            outputType:     'png',
-            logLevel:       2,
-            fileNameFormat: 'result%d',
-            callback:       function(data) {
-                getAllImageFiles()
-                .then(imageArray => {
-                    console.log('images', JSON.stringify(imageArray));
-                    startServer();
-                    startSocketServer();
-                })
-                .catch(error => {
-                    console.log(`couldn't read all files`);
-                });
-            
-                console.log(data.failed, data.success.length, data.files.length, data.time);
-            }
-        }).run();
-       
+
+pdf2img.setOptions({
+    type: 'png',                                // png or jpg, default jpg 
+    size: 1024,                                 // default 1024 
+    density: 600,                               // default 600 
+    outputdir: __dirname + path.sep + 'output', // output folder, default null (if null given, then it will create folder name same as file name) 
+    outputname: 'outputFile',                         // output file name, dafault null (if null given, then it will create image name same as input name) 
+    page: null                                  // convert selected page, default null (if null given, then it will convert all pages) 
+  });
+
+pdf2img.convert(inputFile, function(err, info) {
+    if (err) console.log(err)
+    else {
+        console.log(info);
+        images = info.message;
+        startServer();
+        startSocketServer();
     }
-});
+  });
+
 

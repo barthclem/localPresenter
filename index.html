@@ -17,6 +17,7 @@
                         var ctx = document.getElementById('canvas').getContext('2d');
                         var present = document.getElementById('presentation');
                         var prevImage=new Image(), nextImage =new Image();
+                        present.appendChild(prevImage);
 
                         
             socket.emit('start');
@@ -24,7 +25,6 @@
                 console.log(`response message -> ${JSON.stringify(data)}`);
                 if(data.image) {
                     prevImage.src = 'data:image/png;base64, ' + data.buf;
-                    present.appendChild(prevImage);
                 }
             });
 
@@ -32,11 +32,6 @@
                 console.log(`next slide message -> ${JSON.stringify(data)}`);
                 if(data.image) {
                     prevImage.src = 'data:image/png;base64, ' + data.buf;
-                    //nextImage.src = 'data:image/png;base64, ' + data.buf;
-                    //present.replaceChild(prevImage, nextImage);
-                    //present.appendChild(nextImage);
-                    //prevImage = Object.assign({},nextImage);
-                    //nextImage = new Image();
                 }
             });
 
