@@ -16,16 +16,19 @@ const io = socket(server);
 const link= {};
 let images = [];
 let currentIndex =0;
+let presenter = '';
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({
     extended: false
 }));
 app.use(crossOriginMiddleWare());
+app.use(express.static(__dirname+ '/public'));
 app.get('/', (req, res, next) => {
-    res.sendFile(__dirname+'/index1.html');
+    res.sendFile(__dirname+'/public/index1.html');
 });
 
-app.get('/:link', (req, res, next)=> {
+
+app.get('/link/:link', (req, res, next)=> {
     const link = req.params.link;
     res.json({success: 'true',
             message: `This is the link that you entered - http://localhost:4000/${link}`,
@@ -34,7 +37,14 @@ app.get('/:link', (req, res, next)=> {
 });
 
 app.get('/presenter', (req, res, next)=> {
-    res.sendFile(__dirname+'/presenter.html');
+    res.sendFile(__dirname+'/public/presenter.html');
+});
+
+app.post('/presenter', (req, res, next) => {
+    const body = req.body;
+    presenter = req.body.presenter? req.body.presenter : presenter;
+    console.log(`The presenter is -> ${presenter}`);
+    res.sendFile(__dirname+'/public/index1.html');
 });
 
 app.post('/create', (req, res, next) => {
@@ -82,7 +92,8 @@ function startSocketServer() {
                     image: false,
                     buf: [],
                     currentIndex: images[currentIndex]['page'],
-                    totalNumber: images.length
+                    totalNumber: images.length,
+                    presenter: presenter
                 });
                } else {
                 socket.emit('start-res', {
@@ -90,22 +101,27 @@ function startSocketServer() {
                     image: true,
                     buf: buf.toString('base64'),
                     currentIndex: images[currentIndex]['page'],
-                    totalNumber: images.length
+                    totalNumber: images.length,
+                    presenter: presenter
                 });
                }
             });
             
         });
         socket.on('slide-next', (data) => {
-            currentIndex = ++currentIndex === images.length ? 0 : currentIndex;
-            console.log(` Next Slide -> ${currentIndex} Total Slides -> ${images.length}`);
-            moveSlide(io, data, 'next-slide');
+            if(data.presenting){
+                currentIndex = ++currentIndex === images.length ? 0 : currentIndex;
+                console.log(` Next Slide -> ${currentIndex} Total Slides -> ${images.length}`);    
+                moveSlide(io, data, 'next-slide');
+            }
         });
 
         socket.on('slide-prev', (data) => {
+            if(data.presenting){
             currentIndex =  currentIndex > 0? --currentIndex: 0;
-            console.log(` Prev Slide -> ${currentIndex}`);
+            console.log(`Prev Slide -> ${currentIndex}`);
             moveSlide(io, data, 'prev-slide');
+            }
         });
 
     });
@@ -125,6 +141,7 @@ function moveSlide(io, data, event) {
                     buf: buf.toString('base64'),
                     currentIndex: images[currentIndex]['page'],
                     totalNumber: images.length,
+                    presenter: presenter,
                     canNext: currentIndex < images.length,
                     canPrev: currentIndex > 1
                 });
@@ -142,13 +159,13 @@ pdf2img.setOptions({
     outputname: 'outputFile',                         // output file name, dafault null (if null given, then it will create image name same as input name) 
     page: null                                  // convert selected page, default null (if null given, then it will convert all pages) 
   });
-
+  startServer();
 pdf2img.convert(inputFile, function(err, info) {
     if (err) console.log(err)
     else {
         console.log(info);
         images = info.message;
-        startServer();
+        //startServer();
         startSocketServer();
     }
   });
